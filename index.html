@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎮 TripleH - Teorema Pythagoras</title>
+  <style>
+    body {
+      font-family: 'Comic Sans MS', cursive;
+      background: linear-gradient(to right, #a1c4fd, #c2e9fb);
+      text-align: center;
+      padding: 20px;
+      color: #333;
+    }
+    h1 {
+      font-size: 2.5em;
+      color: #2c3e50;
+    }
+    input, button {
+      padding: 10px;
+      margin: 10px;
+      font-size: 1em;
+      border-radius: 8px;
+      border: none;
+    }
+    #loginSection, #mainMenu, #gameBox, #triangleCanvas {
+      display: none;
+    }
+    #loginSection {
+      display: block;
+    }
+    .btn {
+      background-color: #3498db;
+      color: white;
+      cursor: pointer;
+      width: 220px;
+    }
+    .btn:hover {
+      background-color: #2980b9;
+    }
+    #logoutBtn {
+      background-color: #e74c3c;
+      color: white;
+      cursor: pointer;
+      width: 220px;
+    }
+    #lastScore {
+      margin-top: 10px;
+      font-style: italic;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎮 TripleH - Teorema Pythagoras</h1>
+
+  <!-- 🔐 Login -->
+  <div id="loginSection">
+    <h2>🔒 Login Siswa</h2>
+    <input type="text" id="studentName" placeholder="Masukkan Nama Anda" />
+    <br />
+    <button class="btn" onclick="login()">Masuk</button>
+  </div>
+
+  <!-- ✅ Menu Utama -->
+  <div id="mainMenu">
+    <h2>Halo, <span id="userDisplay"></span>!</h2>
+    <div id="lastScore"></div>
+    <h3>Pilih Mode:</h3>
+    <button class="btn" onclick="startLevel('mudah')">🔹 Mudah</button>
+    <button class="btn" onclick="startLevel('sedang')">🟡 Sedang</button>
+    <button class="btn" onclick="startLevel('sulit')">🔺 Sulit</button>
+    <button class="btn" onclick="startLatihan()">🧘 Mode Latihan</button>
+    <button id="logoutBtn" onclick="logout()">Logout</button>
+  </div>
+
+  <!-- 📐 Canvas -->
+  <canvas id="triangleCanvas" width="800" height="600"></canvas>
+
+  <!-- 🧠 Game Box -->
+  <div class="question-box" id="gameBox">
+    <div id="timer"></div>
+    <div id="question">Memuat soal...</div>
+    <div class="choices" id="choices"></div>
+    <div id="feedback"></div>
+    <div id="score">Skor: 0</div>
+    <button class="btn" onclick="restart()">🔄 Main Lagi</button>
+    <button class="btn" onclick="backToMenu()">🔙 Kembali</button>
+  </div>
+
+  <script>
+    const soalAll = [
+      { a: 3, b: 4, correct: 5, options: [5, 6, 4, 7], soal: "Sisi tegak 3, alas 4. Berapa sisi miring?" },
+      { a: 6, b: 8, correct: 10, options: [9, 10, 11, 12], soal: "Kaki segitiga 6 dan 8. Hitung sisi miring." },
+      { a: 5, b: 12, correct: 13, options: [13, 14, 12, 11], soal: "Sisi lain 5 dan 12. Hitung sisi miring." },
+      { a: 8, b: 15, correct: 17, options: [17, 16, 18, 19], soal: "Tentukan panjang sisi miring." },
+      { a: 12, b: 16, correct: 20, options: [18, 20, 21, 19], soal: "Bergerak 12 ke kanan dan 16 ke atas." },
+      { a: 9, b: 40, correct: 41, options: [40, 41, 39, 42], soal: "Berjalan 9m utara dan 40m timur. Jarak?" }
+    ];
+
+    let student = null, score = 0, current = 0, questions = [], isLatihan = false, timerInterval, timeLimit = 30;
+    const triangleCanvas = document.getElementById("triangleCanvas");
+    const ctx = triangleCanvas.getContext("2d");
+
+    function login() {
+      const name = document.getElementById("studentName").value.trim();
+      if (!name) return;
+      student = name;
+      localStorage.setItem("studentName", name);
+      document.getElementById("userDisplay").innerText = name;
+      const last = localStorage.getItem(`score_${name}`);
+      document.getElementById("lastScore").innerText = last ? `Skor terakhir: ${last}` : "Belum ada skor sebelumnya.";
+      document.getElementById("loginSection").style.display = "none";
+      document.getElementById("mainMenu").style.display = "block";
+    }
+
+    function logout() {
+      localStorage.removeItem("studentName");
+      location.reload();
+    }
+
+    function startLevel(level) {
+      isLatihan = false;
+      if (level === "mudah") { questions = soalAll.slice(0, 2); timeLimit = 30; }
+      else if (level === "sedang") { questions = soalAll.slice(2, 4); timeLimit = 25; }
+      else { questions = soalAll.slice(4, 6); timeLimit = 20; }
+      current = 0; score = 0;
+      showGame(); loadQuestion();
+    }
+
+    function startLatihan() {
+      isLatihan = true;
+      questions = soalAll;
+      current = 0; score = 0;
+      showGame(); loadQuestion();
+    }
+
+    function showGame() {
+      document.getElementById("mainMenu").style.display = "none";
+      document.getElementById("gameBox").style.display = "block";
+      triangleCanvas.style.display = "block";
+      updateScore();
+    }
+
+    function drawTriangle(a, b, showC = false, c = null) {
+      ctx.clearRect(0, 0, triangleCanvas.width, triangleCanvas.height);
+      const padding = 100;
+      const cw = triangleCanvas.width - padding;
+      const ch = triangleCanvas.height - padding;
+      const scale = Math.min(cw / a, ch / b);
+      const startX = padding / 2;
+      const startY = triangleCanvas.height - padding / 2;
+
+      const x1 = startX, y1 = startY;
+      const x2 = startX + a * scale, y2 = startY;
+      const x3 = startX, y3 = startY - b * scale;
+
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.lineTo(x3, y3);
+      ctx.closePath();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#2c3e50";
+      ctx.stroke();
+
+      ctx.font = "20px Arial";
+      ctx.fillStyle = "#2c3e50";
+      ctx.fillText(`${a}`, (x1 + x2) / 2, y1 + 25);
+      ctx.fillText(`${b}`, x1 - 35, (y1 + y3) / 2);
+      const cLabel = showC && c !== null ? `${c}` : "?";
+      ctx.fillText(cLabel, (x2 + x3) / 2 + 15, (y2 + y3) / 2);
+    }
+
+    function startTimer(sec) {
+      clearInterval(timerInterval);
+      if (isLatihan) {
+        document.getElementById("timer").innerText = "";
+        return;
+      }
+      let t = sec;
+      document.getElementById("timer").innerText = `⏱ Waktu: ${t}s`;
+      timerInterval = setInterval(() => {
+        t--;
+        document.getElementById("timer").innerText = `⏱ Waktu: ${t}s`;
+        if (t <= 0) {
+          clearInterval(timerInterval);
+          current++;
+          loadQuestion();
+        }
+      }, 1000);
+    }
+
+    function loadQuestion() {
+      if (current >= questions.length) { endGame(); return; }
+      const q = questions[current];
+      drawTriangle(q.a, q.b);
+      document.getElementById("question").innerText = q.soal;
+      const box = document.getElementById("choices");
+      box.innerHTML = "";
+      document.getElementById("feedback").innerText = "";
+      q.options.forEach(opt => {
+        const btn = document.createElement("button");
+        btn.className = "btn";
+        btn.textContent = opt;
+        btn.onclick = () => checkAnswer(opt);
+        box.appendChild(btn);
+      });
+      startTimer(timeLimit);
+    }
+
+    function checkAnswer(sel) {
+      clearInterval(timerInterval);
+      const q = questions[current];
+      const ok = sel === q.correct;
+      if (ok) score += 10;
+      updateScore();
+      document.getElementById("feedback").innerText = ok
+        ? "✅ Benar!"
+        : `❌ Salah. Jawaban benar: ${q.correct}`;
+      drawTriangle(q.a, q.b, true, q.correct);
+      setTimeout(() => {
+        current++;
+        loadQuestion();
+      }, 1500);
+    }
+
+    function updateScore() {
+      document.getElementById("score").innerText = "Skor: " + score;
+    }
+
+    function endGame() {
+      document.getElementById("question").innerText = `Permainan selesai! Skor akhir: ${score}`;
+      document.getElementById("choices").innerHTML = "";
+      document.getElementById("timer").innerText = "";
+      document.getElementById("feedback").innerText = "";
+      if (!isLatihan && student) localStorage.setItem(`score_${student}`, score);
+    }
+
+    function restart() {
+      document.getElementById("mainMenu").style.display = "block";
+      document.getElementById("gameBox").style.display = "none";
+      triangleCanvas.style.display = "none";
+    }
+
+    function backToMenu() { restart(); }
+
+    window.onload = () => {
+      const s = localStorage.getItem("studentName");
+      if (s) {
+        document.getElementById("studentName").value = s;
+        login();
+      }
+    };
+  </script>
+</body>
+</html>
